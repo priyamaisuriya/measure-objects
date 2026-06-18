@@ -250,7 +250,11 @@
         <!-- Camera Section -->
         <section class="glass-panel camera-section">
             <div class="video-container" id="videoWrapper">
-                <video id="webcam" autoplay playsinline></video>
+                <!-- Keep video hidden but active for capturing -->
+                <video id="webcam" autoplay playsinline muted style="position:absolute; opacity:0; z-index:-1; pointer-events:none;"></video>
+                <!-- Live feed from Python WebSocket -->
+                <img id="liveFeed" style="width: 100%; height: 100%; object-fit: contain; background: #000;" alt="Loading Live Feed..." />
+                
                 <img id="resultImage" style="display:none; width: 100%; height: 100%; object-fit: contain;" />
                 <!-- Hidden canvas for capturing frames -->
                 <canvas id="canvas" style="display:none;"></canvas>
@@ -308,6 +312,9 @@
                     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
                 });
                 video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play().catch(e => console.error("Video play error:", e));
+                };
             } catch (err) {
                 console.error("Error accessing webcam:", err);
                 resultsList.innerHTML = `<li style="color: #ef4444;">Camera access denied or unavailable.</li>`;
@@ -320,7 +327,7 @@
         captureBtn.addEventListener('click', () => {
             // If it says Retake Photo, reset
             if (btnText.innerText === 'Retake Photo') {
-                document.getElementById('webcam').style.display = 'block';
+                document.getElementById('liveFeed').style.display = 'block';
                 document.getElementById('resultImage').style.display = 'none';
                 btnText.innerText = 'Capture & Measure';
                 resultsList.innerHTML = '<li style="color: var(--text-muted); text-align: center; margin-top: 2rem;">Waiting for capture...</li>';
@@ -392,13 +399,56 @@
             
             // Show the returned image
             if (data.image_base64) {
-                document.getElementById('webcam').style.display = 'none';
+                document.getElementById('liveFeed').style.display = 'none';
                 const resultImg = document.getElementById('resultImage');
                 resultImg.style.display = 'block';
                 resultImg.src = 'data:image/jpeg;base64,' + data.image_base64;
                 btnText.innerText = 'Retake Photo';
             }
         }
+
+        // --- HTTP Polling Live Streaming Logic ---
+        let isPolling = false;
+        
+        async function pollLiveFeed() {
+            if (document.getElementById('resultImage').style.display === 'block') {
+                setTimeout(pollLiveFeed, 500); // Wait and try again
+                return;
+            }
+            
+            if (video.readyState >= 3 && video.videoWidth > 0) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+                
+                if(dataUrl.length > 50) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/live', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ image_base64: dataUrl })
+                        });
+                        
+                        const data = await response.json();
+                        if(data.status === 'success' && data.image_base64) {
+                            const liveFeed = document.getElementById('liveFeed');
+                            liveFeed.src = 'data:image/jpeg;base64,' + data.image_base64;
+                            liveFeed.style.background = 'none';
+                        }
+                    } catch(e) {
+                        console.error("Live feed error:", e);
+                    }
+                }
+            }
+            
+            // Call again after 200ms
+            setTimeout(pollLiveFeed, 200);
+        }
+        
+        // Start HTTP polling loop
+        pollLiveFeed();
     </script>
 </body>
 </html>
