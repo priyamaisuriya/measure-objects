@@ -10,7 +10,8 @@ This is a full-stack application:
 - **Frontend:** PHP, Laravel, Node.js, Vite
 ---
 ## 🚀 How to Run the Project
-Follow these steps to run the project locally on your machine.
+Follow these steps to run the project locally on your machine
+.
 ### 1. Running the Vision Engine (FastAPI Backend)
 First, start the FastAPI backend server. Open your terminal and run the following commands:
 ```bash
@@ -25,7 +26,8 @@ source venv/bin/activate
 python -m uvicorn main:app --reload --port 8000
 API Access URL: http://localhost:8000
 
-2. Running the Web App (Laravel Frontend)
+
+###2. Running the Web App (Laravel Frontend)
 Open a new terminal window to start the frontend application.
 
 bash
